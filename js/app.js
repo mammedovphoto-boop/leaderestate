@@ -1,5 +1,5 @@
-import { CONFIG } from "./config.js?v=5";
-import { I18N } from "./i18n.js?v=5";
+import { CONFIG } from "./config.js?v=6";
+import { I18N } from "./i18n.js?v=6";
 
 document.documentElement.classList.add("js");
 const $ = (s, r = document) => r.querySelector(s);
@@ -104,8 +104,18 @@ function renderDistricts() {
   list.scrollTop = top;
   if (focusId) { const el = $$("button", list).find((b) => b.dataset.id === focusId); if (el) el.focus({ preventScroll: true }); }
   const picked = $("#dPicked"); picked.textContent = "";
-  const names = [...(st.dq ? [t("d_" + st.dq)] : []), ...ALL_D.filter((d) => dSel.has(d.id)).map((d) => dName(d)[0])];
-  for (const n of names) { const s = document.createElement("span"); s.textContent = n; picked.append(s); }
+  const tags = [...(st.dq ? [[t("d_" + st.dq), () => { st.dq = null; }]] : []),
+    ...ALL_D.filter((d) => dSel.has(d.id)).map((d) => [dName(d)[0], () => dSel.delete(d.id)])];
+  const names = tags;
+  for (const [n, remove] of tags) {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "dtag";
+    b.setAttribute("aria-label", `${t("d_remove")}: ${n}`);
+    const x = document.createElement("span"); x.textContent = "×"; x.setAttribute("aria-hidden", "true");
+    b.append(n, x);
+    b.addEventListener("click", () => { remove(); renderDistricts(); $("#dSearch").focus({ preventScroll: true }); });
+    picked.append(b);
+  }
   $("#dClear").hidden = !names.length && !st.dOther;
   $("#districtOther").hidden = !st.dOther;
 }
