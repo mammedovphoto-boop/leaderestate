@@ -3,9 +3,9 @@
 /assets/*
   Cache-Control: public, max-age=604800
 /css/*
-  Cache-Control: public, max-age=3600
+  Cache-Control: no-cache
 /js/*
-  Cache-Control: public, max-age=3600
+  Cache-Control: no-cache
 /*
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
