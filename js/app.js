@@ -11,7 +11,8 @@ try {
   const saved = localStorage.getItem("le_lang");
   if (CONFIG.langs.includes(saved)) lang = saved;
 } catch (e) {}
-const st = { intent: null, mode: null, ptype: null, rooms: null, cur: CONFIG.currencies[0] };
+const st = { intent: null, mode: null, ptype: null, rooms: null, cur: CONFIG.currencies[0], dq: null, dOther: false };
+const dSel = new Set(); // chosen district ids
 const errors = {}; // field -> i18n key
 let ready = false;
 let statusKey = null;
@@ -52,34 +53,69 @@ function renderChips(name) {
   }
 }
 
+const ALL_D = CONFIG.districts.flatMap((g) => g.items);
+const dName = (d) => [d[lang] || d.ru, d[lang + "Old"] ?? d.ruOld ?? ""];
+const dHay = (d) => [d.ru, d.ruOld, d.tm, d.tmOld, d.en, d.enOld].join(" ").toLowerCase();
+
+function dChip(label, old, pressed, onClick, id) {
+  const b = document.createElement("button");
+  b.type = "button"; b.className = "chip dchip"; b.dataset.id = id;
+  b.setAttribute("aria-pressed", String(pressed));
+  b.append(label);
+  if (old) { const s = document.createElement("small"); s.textContent = old; b.append(s); }
+  b.addEventListener("click", onClick);
+  return b;
+}
+
 function renderDistricts() {
-  const sel = $("#district");
-  const keep = sel.value;
-  sel.textContent = "";
-  const add = (parent, value, label) => {
-    const o = document.createElement("option"); o.value = value; o.textContent = label; parent.append(o); return o;
+  const list = $("#dList");
+  const q = $("#dSearch").value.trim().toLowerCase();
+  const act = document.activeElement;
+  const focusId = act && list.contains(act) ? act.dataset.id : null;
+  const top = list.scrollTop;
+  list.textContent = "";
+  const group = (title) => {
+    const w = document.createElement("div"); w.className = "dgroup";
+    const h = document.createElement("p"); h.className = "dgroup-t"; h.textContent = title;
+    const box = document.createElement("div"); box.className = "chips";
+    w.append(h, box); list.append(w); return box;
   };
-  add(sel, "", t("d_placeholder"));
   const searching = st.intent === "buy" || (st.intent === "rent" && st.mode !== "let");
-  if (searching) { add(sel, "any", t("d_any")); add(sel, "undecided", t("d_undecided")); }
-  for (const g of CONFIG.districts) {
-    const og = document.createElement("optgroup"); og.label = t(g.group);
-    for (const d of g.items) add(og, d.id, d[lang] || d.ru);
-    sel.append(og);
+  if (!searching) st.dq = null;
+  if (!q) {
+    const box = group(t("g_quick"));
+    if (searching) for (const k of ["any", "undecided"]) {
+      box.append(dChip(t("d_" + k), "", st.dq === k, () => { st.dq = st.dq === k ? null : k; if (st.dq) { dSel.clear(); st.dOther = false; } renderDistricts(); }, "q_" + k));
+    }
+    box.append(dChip(t("d_other"), "", st.dOther, () => { st.dOther = !st.dOther; if (st.dOther) st.dq = null; renderDistricts(); if (st.dOther) $("#districtOther").focus(); }, "q_other"));
   }
-  add(sel, "other", t("d_other"));
-  sel.value = [...sel.options].some((o) => o.value === keep) ? keep : "";
-  $("#districtOther").hidden = sel.value !== "other";
+  let shown = 0;
+  for (const g of CONFIG.districts) {
+    const items = g.items.filter((d) => !q || dHay(d).includes(q));
+    if (!items.length) continue;
+    const box = group(t(g.group));
+    for (const d of items) {
+      const [name, old] = dName(d);
+      box.append(dChip(name, old, dSel.has(d.id), () => { dSel.has(d.id) ? dSel.delete(d.id) : dSel.add(d.id); st.dq = null; renderDistricts(); }, d.id));
+      shown++;
+    }
+  }
+  if (q && !shown) { const p = document.createElement("p"); p.className = "dempty"; p.textContent = t("d_empty"); list.append(p); }
+  list.scrollTop = top;
+  if (focusId) { const el = $$("button", list).find((b) => b.dataset.id === focusId); if (el) el.focus({ preventScroll: true }); }
+  const picked = $("#dPicked"); picked.textContent = "";
+  const names = [...(st.dq ? [t("d_" + st.dq)] : []), ...ALL_D.filter((d) => dSel.has(d.id)).map((d) => dName(d)[0])];
+  for (const n of names) { const s = document.createElement("span"); s.textContent = n; picked.append(s); }
+  $("#dClear").hidden = !names.length && !st.dOther;
+  $("#districtOther").hidden = !st.dOther;
 }
 
 function districtText() {
-  const v = $("#district").value;
-  if (!v) return "";
-  if (v === "any") return t("d_any");
-  if (v === "undecided") return t("d_undecided");
-  if (v === "other") return $("#districtOther").value.trim() || t("d_other");
-  for (const g of CONFIG.districts) for (const d of g.items) if (d.id === v) return d[lang] || d.ru;
-  return "";
+  const parts = [];
+  if (st.dq) parts.push(t("d_" + st.dq));
+  for (const d of ALL_D) if (dSel.has(d.id)) { const [n, o] = dName(d); parts.push(o ? `${n} (${o})` : n); }
+  if (st.dOther) { const v = $("#districtOther").value.trim(); if (v) parts.push(v); }
+  return parts.join("; ");
 }
 
 /* ---------- phone ---------- */
@@ -212,11 +248,9 @@ $$(".lang button").forEach((b) => b.addEventListener("click", () => {
   applyLang();
 }));
 
-$("#district").addEventListener("change", () => {
-  const other = $("#district").value === "other";
-  $("#districtOther").hidden = !other;
-  if (other) $("#districtOther").focus();
-});
+$("#dSearch").addEventListener("input", renderDistricts);
+$("#dSearch").addEventListener("keydown", (e) => { if (e.key === "Enter") e.preventDefault(); });
+$("#dClear").addEventListener("click", () => { dSel.clear(); st.dq = null; st.dOther = false; $("#dSearch").value = ""; $("#districtOther").value = ""; renderDistricts(); });
 $("#money").addEventListener("input", (e) => { e.target.value = groupNum(e.target.value); });
 $("#area").addEventListener("input", (e) => { e.target.value = e.target.value.replace(/[^\d.,]/g, ""); });
 $("#phone").addEventListener("focus", (e) => { if (!e.target.value) e.target.value = "+993 "; });

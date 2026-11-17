@@ -150,8 +150,15 @@
             </div>
 
             <div class="field" data-for="buy sell rent">
-              <label class="lbl" for="district" data-i18n="l_district">Район</label>
-              <select id="district"></select>
+              <label class="lbl" for="dSearch"><span data-i18n="l_district">Район</span> <small data-i18n="d_multi">можно выбрать несколько</small></label>
+              <div class="dbox">
+                <div class="dbox-top">
+                  <input type="search" id="dSearch" autocomplete="off" enterkeyhint="search" data-i18n-ph="d_search_ph">
+                  <button type="button" class="link" id="dClear" data-i18n="d_clear" hidden>Сбросить</button>
+                </div>
+                <div class="dpicked" id="dPicked" aria-live="polite"></div>
+                <div class="dlist" id="dList" tabindex="-1"></div>
+              </div>
               <input type="text" id="districtOther" maxlength="80" hidden data-i18n-ph="d_other_ph" data-i18n-aria="d_other_ph">
             </div>
 
