@@ -34,6 +34,7 @@ function renderChips(name) {
   for (const [id, key, hintKey] of OPT[name]) {
     const b = document.createElement("button");
     b.type = "button";
+    b.dataset.id = id;
     b.className = name === "intent" ? "tile" : "chip";
     b.setAttribute("aria-pressed", String(st[name] === id));
     if (name === "intent") {
@@ -127,10 +128,36 @@ function buildMessage() {
 }
 
 /* ---------- render ---------- */
+const calm = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+// Re-render, keep keyboard focus on the pressed option and glide the card to its new height.
 function update() {
+  const card = $("#reqForm");
+  const act = document.activeElement;
+  const box = act && act.closest ? act.closest("[data-chips]") : null;
+  const focusKey = box ? [box.dataset.chips, act.dataset.id] : null;
+  const h0 = card.offsetHeight;
+  render();
+  if (focusKey) {
+    const el = $$(`[data-chips="${focusKey[0]}"] button`).find((b) => b.dataset.id === focusKey[1]);
+    if (el) el.focus({ preventScroll: true });
+  }
+  const h1 = card.offsetHeight;
+  if (!calm && card.animate && h0 && Math.abs(h1 - h0) > 2) {
+    card.style.overflow = "hidden";
+    const an = card.animate([{ height: h0 + "px" }, { height: h1 + "px" }], { duration: 260, easing: "cubic-bezier(.2,.8,.2,1)" });
+    an.onfinish = an.oncancel = () => { card.style.overflow = ""; };
+  }
+}
+
+function render() {
   const i = st.intent;
   $("#fields").hidden = !i;
-  $$("#fields .field").forEach((f) => { f.hidden = !f.dataset.for.split(" ").includes(i); });
+  $$("#fields .field").forEach((f) => {
+    const was = f.hidden;
+    f.hidden = !f.dataset.for.split(" ").includes(i);
+    if (was && !f.hidden) { f.classList.add("fin"); f.addEventListener("animationend", () => f.classList.remove("fin"), { once: true }); }
+  });
   ["intent", "mode", "ptype", "rooms", "cur"].forEach(renderChips);
   renderDistricts();
   const letting = i === "rent" && st.mode === "let";
@@ -168,6 +195,7 @@ function applyLang() {
   $$("[data-i18n-ph]").forEach((el) => { el.placeholder = t(el.dataset.i18nPh); });
   $$("[data-i18n-aria]").forEach((el) => { el.setAttribute("aria-label", t(el.dataset.i18nAria)); });
   $$(".lang button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.lang === lang)));
+  $(".lang").dataset.cur = lang;
   const pp = $("#ppBody"); pp.textContent = "";
   for (const [h, p] of I18N[lang].pp) {
     const hh = document.createElement("h3"); hh.textContent = h;
@@ -245,6 +273,7 @@ function copyText(txt) {
 $("#sendCopy").addEventListener("click", () => {
   statusKey = copyText($("#msg").textContent) ? "r_copied" : "r_copy_fail";
   $("#status").textContent = t(statusKey);
+  const s = $("#status"); s.classList.remove("pop"); void s.offsetWidth; s.classList.add("pop");
 });
 
 // Service buttons open the form with the service already chosen.
@@ -280,3 +309,50 @@ if ("IntersectionObserver" in window) {
 }
 
 applyLang();
+
+/* ---------- motion ---------- */
+if ("IntersectionObserver" in window) {
+  // Header: light on the first screen, solid once the page is scrolled.
+  const mark = document.createElement("div");
+  mark.style.cssText = "position:absolute;top:0;left:0;width:1px;height:24px;pointer-events:none";
+  document.body.prepend(mark);
+  new IntersectionObserver(([e]) => $("#hdr").classList.toggle("scrolled", !e.isIntersecting)).observe(mark);
+
+  // Highlight the menu item of the section on screen.
+  const links = new Map($$(".nav a").map((a) => [a.getAttribute("href").slice(1), a]));
+  const navIo = new IntersectionObserver((es) => es.forEach((e) => {
+    const a = links.get(e.target.id);
+    if (a) a.setAttribute("aria-current", String(e.isIntersecting));
+  }), { rootMargin: "-45% 0px -50% 0px" });
+  links.forEach((_, id) => { const s = document.getElementById(id); if (s) navIo.observe(s); });
+
+  // Scroll reveal, once per element.
+  if (!calm) {
+    const groups = [".services h2", ".srv li", ".why-head > *", ".why-list li", ".process h2", ".steps li", ".req-head > *", "#reqForm", ".con-logo", ".contacts h2", ".con-phone", ".con-btns", ".con-city"];
+    const io = new IntersectionObserver((es) => es.forEach((e) => {
+      if (!e.isIntersecting) return;
+      const el = e.target; io.unobserve(el);
+      el.classList.add("in");
+      const wait = (parseInt(el.style.getPropertyValue("--d")) || 0) + 800;
+      setTimeout(() => { el.classList.remove("rv", "in"); el.style.removeProperty("--d"); }, wait);
+    }), { rootMargin: "0px 0px -10% 0px" });
+    const vh = innerHeight;
+    groups.forEach((sel) => $$(sel).forEach((el, n) => {
+      if (el.getBoundingClientRect().top < vh * 0.9) return; // already on screen: leave as is
+      el.classList.add("rv");
+      if (n) el.style.setProperty("--d", Math.min(n, 4) * 90 + "ms");
+      io.observe(el);
+    }));
+    // Safety net: at the end of the page nothing may stay hidden.
+    new IntersectionObserver(([e], o) => {
+      if (!e.isIntersecting) return;
+      $$(".rv:not(.in)").forEach((el) => { el.classList.add("in"); io.unobserve(el); });
+      o.disconnect();
+    }).observe($(".ftr"));
+    const srv = $(".srv");
+    if (srv.getBoundingClientRect().top > vh * 0.9) {
+      srv.classList.add("line-wait");
+      new IntersectionObserver(([e], o) => { if (e.isIntersecting) { srv.classList.remove("line-wait"); o.disconnect(); } }, { rootMargin: "0px 0px -10% 0px" }).observe(srv);
+    }
+  }
+}
