@@ -1,5 +1,5 @@
-import { CONFIG } from "./config.js?v=6";
-import { I18N } from "./i18n.js?v=6";
+import { CONFIG } from "./config.js?v=7";
+import { I18N } from "./i18n.js?v=7";
 
 document.documentElement.classList.add("js");
 const $ = (s, r = document) => r.querySelector(s);
