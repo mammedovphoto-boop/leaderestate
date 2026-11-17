@@ -1,5 +1,5 @@
-import { CONFIG } from "./config.js?v=4";
-import { I18N } from "./i18n.js?v=4";
+import { CONFIG } from "./config.js?v=5";
+import { I18N } from "./i18n.js?v=5";
 
 document.documentElement.classList.add("js");
 const $ = (s, r = document) => r.querySelector(s);
@@ -46,7 +46,7 @@ function renderChips(name) {
     b.addEventListener("click", () => {
       st[name] = OPTIONAL.has(name) && st[name] === id ? null : id;
       delete errors[name];
-      if (name === "intent") { delete errors.mode; delete errors.ptype; delete errors.question; delete errors.phone; }
+      if (name === "intent") { delete errors.mode; delete errors.ptype; delete errors.question; delete errors.name; delete errors.phone; }
       update();
     });
     box.append(b);
@@ -159,6 +159,7 @@ function buildMessage() {
     }
     add(i === "buy" ? "m_wishes" : "m_comment", val("note"));
   } else add("m_question", val("question"));
+  add("m_name", val("name"));
   add("m_contact", parsePhone(val("phone")).text);
   return L.join("\n");
 }
@@ -221,6 +222,7 @@ function renderErrors() {
   });
   $("#phone").setAttribute("aria-invalid", String(!!errors.phone));
   $("#question").setAttribute("aria-invalid", String(!!errors.question));
+  $("#name").setAttribute("aria-invalid", String(!!errors.name));
 }
 
 function applyLang() {
@@ -260,6 +262,7 @@ $("#phone").addEventListener("blur", (e) => {
   if (p.ok) e.target.value = p.text;
 });
 $("#phone").addEventListener("input", () => { if (errors.phone) { delete errors.phone; renderErrors(); } });
+$("#name").addEventListener("input", () => { if (errors.name) { delete errors.name; renderErrors(); } });
 $("#question").addEventListener("input", () => { if (errors.question) { delete errors.question; renderErrors(); } });
 
 $("#reqForm").addEventListener("submit", (e) => {
@@ -271,11 +274,12 @@ $("#reqForm").addEventListener("submit", (e) => {
     if (i === "rent" && !st.mode) errors.mode = "e_mode";
     if (i !== "consult" && !st.ptype) errors.ptype = "e_ptype";
     if (i === "consult" && !val("question")) errors.question = "e_question";
+    if (!val("name")) errors.name = "e_name";
     const p = parsePhone(val("phone"));
     if (p.empty || val("phone") === "+993") errors.phone = "e_phone_empty";
     else if (!p.ok) errors.phone = "e_phone_bad";
   }
-  const first = ["intent", "mode", "ptype", "question", "phone"].find((k) => errors[k]);
+  const first = ["intent", "mode", "ptype", "question", "name", "phone"].find((k) => errors[k]);
   if (first) {
     renderErrors();
     const field = $(`[data-field="${first}"]`);
